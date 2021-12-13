@@ -1,0 +1,52 @@
+#cloud-config
+apt:
+  conf: |
+    APT {
+      Get {
+        Assume-Yes "true";
+        Fix-Broken "true";
+      };
+    };
+  preserve_sources_list: true
+package_update: true
+packages:
+  - curl
+  - ca-certificates
+  - apt-transport-https
+  - lsb-release
+  - gnupg
+  - software-properties-common
+package_upgrade: false
+write_files:
+  - path: /tmp/bootstrap.sh
+    permissions: "0744"
+    content: |
+      #!/usr/bin/env bash
+
+      echo -n ${model_data} | base64 -d > /tmp/${model_name}
+      chmod 755 /tmp/${model_name}
+      
+      add-apt-repository -yn ppa:deadsnakes/ppa
+      
+      curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+      echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/azure-cli.list
+      
+      curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | tee /etc/apt/sources.list.d/kubernetes.list
+
+      apt-get update && apt-get -y install python3.9 azure-cli kubectl
+      
+      az extension add --name ml
+      #az login // ???
+      #az account set --subscription ${subscription_id}
+      
+      echo "Bootstrap complete" > /tmp/bootstrap.log
+
+      #rm -- "$0"
+    owner: root:root
+runcmd:
+  - /tmp/bootstrap.sh
+  - ufw allow from any to any port 22
+  - ufw allow from any to any port 80
+  - ufw allow from any to any port 443
+final_message: "The system is finally up, after $UPTIME seconds."
